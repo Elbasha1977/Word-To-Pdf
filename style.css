@@ -1,0 +1,62 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'Cairo',sans-serif;
+    background:linear-gradient(135deg,#0f172a,#1e293b,#334155);
+    min-height:100vh;
+    overflow-x:hidden;
+    color:white;
+}
+
+.bg-animation{
+    position:fixed;
+    inset:0;
+    background:
+    radial-gradient(circle at 20% 20%,rgba(59,130,246,.25),transparent 25%),
+    radial-gradient(circle at 80% 40%,rgba(168,85,247,.2),transparent 25%),
+    radial-gradient(circle at 50% 80%,rgba(14,165,233,.2),transparent 25%);
+    animation:moveBg 10s infinite alternate;
+}
+
+@keyframes moveBg{
+    from{
+        transform:translateY(0px);
+    }
+    to{
+        transform:translateY(-20px);
+    }
+}
+
+.container{
+    position:relative;
+    z-index:1;
+    max-width:850px;
+    margin:auto;
+    padding:30px 20px;
+}
+
+.header{
+    width:100%;
+    overflow:hidden;
+    border-radius:25px 25px 0 0;
+}
+
+.logo{
+    width:100%;
+    height:220px;
+    object-fit:cover;
+    display:block;
+}
+
+.card{
+    background:rgba(255,255,255,.08);
+    backdrop-filter:blur(12px);
+    padding:35px;
+    border-radius:0 0 25px 25px;
+    border:1px solid rgba(255,255,255,.1);
+    box-shadow:0 10px 40px rgba(0,0,0,.4);
+}
