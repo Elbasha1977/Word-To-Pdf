@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>PDF Converter - Final Version</title>
+
+<HTA:APPLICATION
+    APPLICATIONNAME="PDF Converter"
+    BORDER="thin"
+    CAPTION="yes"
+    SHOWINTASKBAR="yes"
+    SINGLEINSTANCE="yes"
+    WINDOWSTATE="normal"
+    SCROLL="auto"
+/>
+
+<style>
+/* توسيع واجهة البرنامج لتملأ الشاشة */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #eef2f6;
+}
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+/* جعل البطاقة تأخذ عرض أكبر مع الحفاظ على هوامش بسيطة */
+.card {
+    width: 95%;
+    max-width: 1400px;
+    margin: 15px auto;
+    background: #fff;
+    padding: 25px 30px;
+    border-radius: 16px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    box-sizing: border-box;
+}
+/* تحسين توزيع الأزرار لتتناسب مع العرض الأكبر */
+.button-group {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin: 15px 0;
+}
+button {
+    padding: 10px 18px;
+    margin: 0;
+    border-radius: 8px;
+    border: 0;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: 0.2s;
+}
+button:hover {
+    opacity: 0.85;
+    transform: scale(1.02);
+}
+.primary { background: #2d6cdf; color: #fff; }
+.warning { background: #f0ad4e; color: #fff; }
+.danger { background: #d9534f; color: #fff; }
+.success { background: #5cb85c; color: #fff; }
+.info { background: #5bc0de; color: #fff; }
+
+progress {
+    width: 100%;
+    height: 28px;
+    margin: 8px 0;
+}
+small { color: #666; display: block; margin-top: 8px; }
+.log-area {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 18px;
+    text-align: left;
+    height: 320px;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    font-size: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.folder-list {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    margin: 12px 0;
+    text-align: left;
+    max-height: 100px;
+    overflow-y: auto;
+    font-size: 13px;
+}
+.designer-credit {
+    margin-top: 20px;
+    padding-top: 10px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 14px;
+    color: #2c3e50;
+    background: #fafafa;
+    border-radius: 50px;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 8px 28px;
+}
+.designer-credit img {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #2d6cdf;
+    background: white;
+}
+.status-area {
+    background: #f4f7fc;
+    padding: 8px 12px;
+    border-radius: 10px;
+    margin: 10px 0;
+}
+/* قسم حقوق البرنامج - دعم اللغة العربية */
+.arabic-footer {
+    direction: rtl;
+    font-family: 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+    text-align: center;
+    background: #f8f9fa;
+    padding: 12px 20px;
+    border-radius: 12px;
+    margin-top: 15px;
+    border-right: 4px solid #2d6cdf;
+    font-size: 34px;
+    line-height: 1.6;
+}
+.arabic-footer h3 {
+    margin: 0 0 8px 0;
+    color: #1a5bbf;
+    font-size: 30px;
+}
+.arabic-footer p {
+    margin: 5px 0;
+    color: #333;
+}
+.arabic-footer .phone {
+    font-weight: bold;
+    color: #2d6cdf;
+    font-size: 30px;
+}
+</style>
+
+<script language="VBScript">
+
+Dim objFSO
+Dim WordApp, ExcelApp, PPTApp
+Dim folders()
+Dim folderCount
+Dim fileQueue()
+Dim totalFiles
+Dim queueIndex
+Dim isRunning
+Dim currentFile
+Dim errorCount
+
+' ================= INIT =================
+Sub Window_OnLoad
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+    folderCount = 0
+    totalFiles = 0
+    queueIndex = 0
+    isRunning = False
+    errorCount = 0
+    ReDim folders(0)
+    ReDim fileQueue(0)
+    Call AddLogMessage("=== PDF Converter Started ===")
+    Call AddLogMessage("Checking Office installation...")
+    
+    On Error Resume Next
+    Dim testWord, testExcel, testPPT
+    Set testWord = CreateObject("Word.Application")
+    If Err.Number = 0 Then
+        Call AddLogMessage("Microsoft Word found")
+        testWord.Quit
+    Else
+        Call AddLogMessage("Microsoft Word NOT found")
+    End If
+    
+    Set testExcel = CreateObject("Excel.Application")
+    If Err.Number = 0 Then
+        Call AddLogMessage("Microsoft Excel found")
+        testExcel.Quit
+    Else
+        Call AddLogMessage("Microsoft Excel NOT found")
+    End If
+    
+    Set testPPT = CreateObject("PowerPoint.Application")
+    If Err.Number = 0 Then
+        Call AddLogMessage("Microsoft PowerPoint found")
+        testPPT.Quit
+    Else
+        Call AddLogMessage("Microsoft PowerPoint NOT found")
+    End If
+    On Error GoTo 0
+    
+    ' Fix image display
+    Dim imgElem
+    Set imgElem = document.getElementById("designerImage")
+    If Not imgElem Is Nothing Then
+        imgElem.src = "https://i.postimg.cc/L5htcFQM/Screenshot-2025-09-24-164652.jpg"
+        imgElem.style.display = "inline-block"
+    End If
+    
+    Call AddLogMessage("Ready - Add folders to begin")
+End Sub
+
+' ================= ADD LOG MESSAGE =================
+Sub AddLogMessage(msg)
+    Dim timeStr
+    timeStr = Hour(Now) & ":" & Right("0" & Minute(Now), 2) & ":" & Right("0" & Second(Now), 2)
+    
+    Dim currentLog
+    currentLog = document.getElementById("logArea").innerHTML
+    document.getElementById("logArea").innerHTML = "[" & timeStr & "] " & msg & "<br>" & currentLog
+End Sub
+
+' ================= ADD FOLDER =================
+Sub AddFolder
+    Dim shell, folder, folderPath
+    
+    On Error Resume Next
+    Set shell = CreateObject("Shell.Application")
+    Set folder = shell.BrowseForFolder(0, "Select Folder containing Office files", 0)
+    
+    If Err.Number <> 0 Then
+        Call AddLogMessage("Error: Cannot open folder browser")
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    If Not folder Is Nothing Then
+        folderPath = folder.Self.Path
+        
+        Dim i, alreadyExists
+        alreadyExists = False
+        For i = 0 To folderCount - 1
+            If folders(i) = folderPath Then
+                alreadyExists = True
+                Exit For
+            End If
+        Next
+        
+        If alreadyExists Then
+            Call AddLogMessage("Folder already added: " & folderPath)
+            Exit Sub
+        End If
+        
+        ReDim Preserve folders(folderCount)
+        folders(folderCount) = folderPath
+        folderCount = folderCount + 1
+        
+        Call UpdateFolderList()
+        Call AddLogMessage("Added folder: " & folderPath)
+    End If
+End Sub
+
+' ================= UPDATE FOLDER LIST UI =================
+Sub UpdateFolderList()
+    Dim html, i
+    html = ""
+    For i = 0 To folderCount - 1
+        html = html & "• " & folders(i) & "<br>"
+    Next
+    If html = "" Then html = "No folders added yet"
+    document.getElementById("folderList").innerHTML = html
+End Sub
+
+' ================= SCAN FILES =================
+Sub ScanFiles()
+    Dim i
+    
+    totalFiles = 0
+    ReDim fileQueue(0)
+    
+    Call AddLogMessage("Scanning folders for Office files...")
+    
+    For i = 0 To folderCount - 1
+        Call ScanFolder(folders(i))
+    Next
+    
+    If totalFiles = 0 Then
+        Call AddLogMessage("No Office files found")
+        MsgBox "No Office files found in selected folders." & vbCrLf & _
+               "Supported: DOC, DOCX, XLS, XLSX, PPT, PPTX", vbExclamation, "No Files"
+    Else
+        Call AddLogMessage("Found " & totalFiles & " file(s)")
+    End If
+End Sub
+
+' ================= SCAN FOLDER RECURSIVELY =================
+Sub ScanFolder(folderPath)
+    Dim folder, subFolder, file, ext
+    
+    On Error Resume Next
+    Set folder = objFSO.GetFolder(folderPath)
+    If Err.Number <> 0 Then Exit Sub
+    On Error GoTo 0
+    
+    If LCase(objFSO.GetFileName(folderPath)) = "pdf" Then Exit Sub
+    
+    For Each file In folder.Files
+        ext = LCase(objFSO.GetExtensionName(file.Name))
+        
+        If ext = "doc" Or ext = "docx" Or ext = "xls" Or ext = "xlsx" Or ext = "ppt" Or ext = "pptx" Then
+            ReDim Preserve fileQueue(totalFiles)
+            fileQueue(totalFiles) = file.Path
+            totalFiles = totalFiles + 1
+            Call AddLogMessage("  Found: " & file.Name)
+        End If
+    Next
+    
+    For Each subFolder In folder.SubFolders
+        Call ScanFolder(subFolder.Path)
+    Next
+End Sub
+
+' ================= CONVERT POWERPOINT =================
+Function ConvertPowerPointToPDF(pptPath, pdfPath)
+    Dim ppt
+    ConvertPowerPointToPDF = False
+    
+    On Error Resume Next
+    
+    If PPTApp Is Nothing Then
+        Call AddLogMessage("  PowerPoint application not available")
+        Exit Function
+    End If
+    
+    Call AddLogMessage("  Opening PowerPoint file...")
+    Set ppt = PPTApp.Presentations.Open(pptPath, False, False, False)
+    
+    If Err.Number <> 0 Then
+        Call AddLogMessage("  Error opening: " & Err.Description)
+        Exit Function
+    End If
+    
+    Call AddLogMessage("  Converting to PDF...")
+    
+    Err.Clear
+    ppt.ExportAsFixedFormat pdfPath, 2
+    If Err.Number = 0 Then
+        ConvertPowerPointToPDF = True
+        Call AddLogMessage("  Conversion successful")
+    Else
+        Call AddLogMessage("  Method 1 failed, trying SaveAs...")
+        Err.Clear
+        ppt.SaveAs pdfPath, 32
+        If Err.Number = 0 Then
+            ConvertPowerPointToPDF = True
+            Call AddLogMessage("  SaveAs method successful")
+        Else
+            Call AddLogMessage("  All methods failed: " & Err.Description)
+        End If
+    End If
+    
+    On Error Resume Next
+    ppt.Close
+    Set ppt = Nothing
+    On Error GoTo 0
+End Function
+
+' ================= CONVERT WORD =================
+Function ConvertWordToPDF(wordPath, pdfPath)
+    Dim doc
+    ConvertWordToPDF = False
+    
+    On Error Resume Next
+    
+    Set doc = WordApp.Documents.Open(wordPath, False, True)
+    
+    If Err.Number <> 0 Then
+        Call AddLogMessage("  Error opening Word: " & Err.Description)
+        Exit Function
+    End If
+    
+    doc.ExportAsFixedFormat pdfPath, 17
+    
+    If Err.Number = 0 Then
+        ConvertWordToPDF = True
+        Call AddLogMessage("  Word converted successfully")
+    Else
+        Call AddLogMessage("  Word conversion error: " & Err.Description)
+    End If
+    
+    doc.Close False
+    Set doc = Nothing
+End Function
+
+' ================= CONVERT EXCEL =================
+Function ConvertExcelToPDF(excelPath, pdfPath)
+    Dim wb
+    ConvertExcelToPDF = False
+    
+    On Error Resume Next
+    
+    Set wb = ExcelApp.Workbooks.Open(excelPath)
+    
+    If Err.Number <> 0 Then
+        Call AddLogMessage("  Error opening Excel: " & Err.Description)
+        Exit Function
+    End If
+    
+    wb.ExportAsFixedFormat 0, pdfPath
+    
+    If Err.Number = 0 Then
+        ConvertExcelToPDF = True
+        Call AddLogMessage("  Excel converted successfully")
+    Else
+        Call AddLogMessage("  Excel conversion error: " & Err.Description)
+    End If
+    
+    wb.Close False
+    Set wb = Nothing
+End Function
+
+' ================= START CONVERSION =================
+Sub StartConvert
+    If folderCount = 0 Then
+        MsgBox "Please add at least one folder first", vbExclamation, "No Folder"
+        Exit Sub
+    End If
+    
+    If isRunning Then
+        MsgBox "Conversion is already running!", vbExclamation, "Busy"
+        Exit Sub
+    End If
+    
+    Call ScanFiles()
+    If totalFiles = 0 Then Exit Sub
+    
+    On Error Resume Next
+    Set WordApp = CreateObject("Word.Application")
+    If Err.Number <> 0 Then
+        MsgBox "Microsoft Word is required!", vbCritical, "Error"
+        Exit Sub
+    End If
+    
+    Set ExcelApp = CreateObject("Excel.Application")
+    If Err.Number <> 0 Then
+        MsgBox "Microsoft Excel is required!", vbCritical, "Error"
+        Exit Sub
+    End If
+    
+    Set PPTApp = CreateObject("PowerPoint.Application")
+    If Err.Number <> 0 Then
+        Call AddLogMessage("WARNING: PowerPoint not available - PPT files will be skipped")
+    End If
+    On Error GoTo 0
+    
+    WordApp.DisplayAlerts = False
+    ExcelApp.DisplayAlerts = False
+    If Not PPTApp Is Nothing Then
+        PPTApp.DisplayAlerts = False
+    End If
+    
+    isRunning = True
+    errorCount = 0
+    queueIndex = 0
+    document.getElementById("progress").value = 0
+    Call AddLogMessage("========================================")
+    Call AddLogMessage("Starting conversion of " & totalFiles & " files")
+    Call AddLogMessage("Note: Office windows may appear briefly")
+    Call AddLogMessage("========================================")
+    
+    Call ConvertNextFile()
+End Sub
+
+' ================= CONVERT NEXT FILE =================
+Sub ConvertNextFile()
+    Dim filePath, ext, pdfFolder, pdfPath, fileName, baseName
+    Dim convertSuccess
+    
+    If Not isRunning Then Exit Sub
+    
+    If queueIndex >= totalFiles Then
+        Call FinishConversion()
+        Exit Sub
+    End If
+    
+    filePath = fileQueue(queueIndex)
+    fileName = objFSO.GetFileName(filePath)
+    baseName = objFSO.GetBaseName(filePath)
+    ext = LCase(objFSO.GetExtensionName(filePath))
+    
+    currentFile = fileName
+    document.getElementById("currentFile").innerText = "Converting: " & fileName
+    Call AddLogMessage("")
+    Call AddLogMessage(">>> Processing: " & fileName)
+    
+    pdfFolder = objFSO.GetParentFolderName(filePath) & "\PDF"
+    If Not objFSO.FolderExists(pdfFolder) Then
+        objFSO.CreateFolder pdfFolder
+        Call AddLogMessage("  Created PDF folder")
+    End If
+    
+    pdfPath = pdfFolder & "\" & baseName & ".pdf"
+    
+    If objFSO.FileExists(pdfPath) Then
+        Call AddLogMessage("  SKIP - PDF already exists")
+        queueIndex = queueIndex + 1
+        Call UpdateProgress()
+        window.setTimeout "ConvertNextFile", 10, "VBScript"
+        Exit Sub
+    End If
+    
+    convertSuccess = False
+    
+    If ext = "doc" Or ext = "docx" Then
+        convertSuccess = ConvertWordToPDF(filePath, pdfPath)
+    ElseIf ext = "xls" Or ext = "xlsx" Then
+        convertSuccess = ConvertExcelToPDF(filePath, pdfPath)
+    ElseIf (ext = "ppt" Or ext = "pptx") Then
+        If Not PPTApp Is Nothing Then
+            convertSuccess = ConvertPowerPointToPDF(filePath, pdfPath)
+        Else
+            Call AddLogMessage("  ERROR: PowerPoint not installed")
+            errorCount = errorCount + 1
+        End If
+    End If
+    
+    If convertSuccess And objFSO.FileExists(pdfPath) Then
+        Call AddLogMessage("  SUCCESS: PDF created in " & pdfFolder)
+    ElseIf convertSuccess Then
+        Call AddLogMessage("  WARNING: Conversion reported success but PDF not found")
+        errorCount = errorCount + 1
+    Else
+        Call AddLogMessage("  FAILED: Could not convert " & fileName)
+        errorCount = errorCount + 1
+    End If
+    
+    queueIndex = queueIndex + 1
+    Call UpdateProgress()
+    
+    window.setTimeout "ConvertNextFile", 100, "VBScript"
+End Sub
+
+' ================= UPDATE PROGRESS =================
+Sub UpdateProgress()
+    Dim percent
+    If totalFiles > 0 Then
+        percent = Int((queueIndex / totalFiles) * 100)
+        document.getElementById("progress").value = percent
+        document.getElementById("status").innerText = percent & "% (" & queueIndex & "/" & totalFiles & ") - Errors: " & errorCount
+    End If
+End Sub
+
+' ================= STOP CONVERSION =================
+Sub StopConvert
+    If Not isRunning Then
+        MsgBox "No conversion is running", vbInformation, "Stop"
+        Exit Sub
+    End If
+    
+    isRunning = False
+    Call AddLogMessage("!!! STOPPED by user !!!")
+    document.getElementById("currentFile").innerText = "Stopped"
+End Sub
+
+' ================= FINISH CONVERSION =================
+Sub FinishConversion()
+    On Error Resume Next
+    
+    If Not WordApp Is Nothing Then
+        WordApp.Quit
+        Set WordApp = Nothing
+    End If
+    
+    If Not ExcelApp Is Nothing Then
+        ExcelApp.Quit
+        Set ExcelApp = Nothing
+    End If
+    
+    If Not PPTApp Is Nothing Then
+        PPTApp.Quit
+        Set PPTApp = Nothing
+    End If
+    
+    On Error GoTo 0
+    
+    isRunning = False
+    document.getElementById("progress").value = 100
+    document.getElementById("status").innerText = "COMPLETED - " & totalFiles & " files, " & errorCount & " errors"
+    document.getElementById("currentFile").innerText = "Done"
+    
+    Call AddLogMessage("========================================")
+    Call AddLogMessage("CONVERSION COMPLETE")
+    Call AddLogMessage("Total files: " & totalFiles)
+    Call AddLogMessage("Errors: " & errorCount)
+    Call AddLogMessage("========================================")
+    
+    If errorCount > 0 Then
+        MsgBox "Conversion completed with " & errorCount & " error(s)." & vbCrLf & vbCrLf & _
+               "Check the log above for details.", vbExclamation, "Completed with Errors"
+    Else
+        MsgBox "Conversion Complete!" & vbCrLf & vbCrLf & _
+               "Successfully converted: " & totalFiles & " files" & vbCrLf & _
+               "Check the 'PDF' folders next to your original files.", vbInformation, "Success"
+    End If
+End Sub
+
+' ================= CLEAR FOLDERS =================
+Sub ClearFolders()
+    If isRunning Then
+        MsgBox "Please stop conversion first", vbExclamation
+        Exit Sub
+    End If
+    
+    folderCount = 0
+    ReDim folders(0)
+    Call UpdateFolderList()
+    Call AddLogMessage("Cleared all folders")
+End Sub
+
+' ================= CLEAR LOG =================
+Sub ClearLog()
+    document.getElementById("logArea").innerHTML = ""
+    Call AddLogMessage("Log cleared")
+End Sub
+
+</script>
+</head>
+
+<body>
+
+<div class="card">
+
+<h2>PDF Converter - Final Version</h2>
+<h3 style="color:#5cb85c;">[OK] Word | Excel | PowerPoint</h3>
+
+<div style="background:#f0f0f0; padding:8px; border-radius:8px; margin:10px 0;">
+    <strong>Selected Folders:</strong>
+    <div id="folderList" class="folder-list">No folders added</div>
+</div>
+
+<div class="button-group">
+    <button class="primary" onclick="AddFolder">Add Folder</button>
+    <button class="success" onclick="StartConvert">Start Convert</button>
+    <button class="danger" onclick="StopConvert">Stop</button>
+    <button class="warning" onclick="ClearFolders">Clear Folders</button>
+    <button class="info" onclick="ClearLog">Clear Log</button>
+</div>
+
+<progress id="progress" value="0" max="100"></progress>
+
+<div class="status-area">
+    <div id="status" style="font-weight:bold;">0%</div>
+    <div id="currentFile" style="color:#2d6cdf; font-size:13px; margin-top:5px;">Ready</div>
+</div>
+
+<div class="log-area" id="logArea">
+[System] Starting...<br>
+</div>
+
+<!-- Designer credit with image -->
+<div class="designer-credit">
+    <img id="designerImage" src="https://i.postimg.cc/L5htcFQM/Screenshot-2025-09-24-164652.jpg" alt="Designer">
+    <span>Designed & Developed by Abdelbaset Atia</span>
+</div>
+
+<!-- قسم حقوق البرنامج - يدعم اللغة العربية بشكل كامل -->
+<div class="arabic-footer">
+    <h3>حقوق البرنامج</h3>
+    <p>مدرسة أحمد بن راشد المريخي الابتدائية للبنين</p>
+    <p>قسم اللغة الإنجليزية</p>
+    <p class="phone">📞 33217162</p>
+</div>
+
+<small>
+   
+</small>
+
+</div>
+
+</body>
+</html>
